@@ -10,16 +10,18 @@ from napalm.base.test.double import BaseTestDouble
 from napalm_cumulus import cumulus
 
 
-@pytest.fixture(scope='class')
+@pytest.fixture(scope="class")
 def set_device_parameters(request):
     """Set up the class."""
+
     def fin():
         request.cls.device.close()
+
     request.addfinalizer(fin)
 
     request.cls.driver = cumulus.CumulusDriver
     request.cls.patched_driver = PatchedCumulusDriver
-    request.cls.vendor = 'cumulus'
+    request.cls.vendor = "cumulus"
     parent_conftest.set_device_parameters(request)
 
 
@@ -35,16 +37,14 @@ class PatchedCumulusDriver(cumulus.CumulusDriver):
         """Patched Cumulus Driver constructor."""
         super().__init__(hostname, username, password, timeout, optional_args)
 
-        self.patched_attrs = ['device']
+        self.patched_attrs = ["device"]
         self.device = FakeCumulusDevice()
 
     def disconnect(self):
         pass
 
     def is_alive(self):
-        return {
-            'is_alive': True  # In testing everything works..
-        }
+        return {"is_alive": True}  # In testing everything works..
 
     def open(self):
         pass
@@ -66,10 +66,10 @@ class FakeCumulusDevice(BaseTestDouble):
 
     def send_command(self, command):
         """Fake send_command."""
-        filename = '{}.json'.format(self.sanitize_text(command))
+        filename = "{}.json".format(self.sanitize_text(command))
         full_path = self.find_file(filename)
 
-        if 'json' in command:
+        if "json" in command:
             result = json.dumps(self.read_json_file(full_path))
         else:
             result = self.read_txt_file(full_path)
@@ -77,10 +77,10 @@ class FakeCumulusDevice(BaseTestDouble):
 
     def send_command_timing(self, command):
         """Fake send_command."""
-        filename = '{}.json'.format(self.sanitize_text(command))
+        filename = "{}.json".format(self.sanitize_text(command))
         full_path = self.find_file(filename)
 
-        if 'json' in command:
+        if "json" in command:
             result = json.dumps(self.read_json_file(full_path))
         else:
             result = self.read_txt_file(full_path)

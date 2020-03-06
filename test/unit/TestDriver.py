@@ -27,29 +27,33 @@ class TestConfigCumulusDriver(unittest.TestCase, TestConfigNetworkDriver):
     @classmethod
     def setUpClass(cls):
         """Run before starting the tests."""
-        hostname = '127.0.0.1'
-        username = 'test'
-        password = 'test'
-        cls.vendor = 'cumulus'
+        hostname = "127.0.0.1"
+        username = "test"
+        password = "test"
+        cls.vendor = "cumulus"
 
         optional_args = {"sudo_pwd": "test"}
-        cls.device = cumulus.CumulusDriver(hostname, username, password, timeout=60,
-                                           optional_args=optional_args)
+        cls.device = cumulus.CumulusDriver(
+            hostname, username, password, timeout=60, optional_args=optional_args
+        )
         cls.device.open()
 
     def test_merge_configuration(self):
-        intended_diff = self.read_file('%s/merge_good.diff' % self.vendor)
+        intended_diff = self.read_file("%s/merge_good.diff" % self.vendor)
 
-        self.device.load_merge_candidate(filename='%s/merge_good.conf' % self.vendor)
+        self.device.load_merge_candidate(filename="%s/merge_good.conf" % self.vendor)
         self.device.commit_config()
 
         # Reverting changes
-        self.device.load_merge_candidate(filename='%s/revert_merge_good.conf' % self.vendor)
+        self.device.load_merge_candidate(
+            filename="%s/revert_merge_good.conf" % self.vendor
+        )
         diff = self.device.compare_config()
         # Removing timestamps
         fixed_diff = diff.split("net add/del commands since the last 'net commit'")[0]
-        fixed_diff = fixed_diff.split(" # and how to activate them. For more information"
-                                      ", see interfaces(5).")[1].strip()
+        fixed_diff = fixed_diff.split(
+            " # and how to activate them. For more information" ", see interfaces(5)."
+        )[1].strip()
 
         print(fixed_diff)
         self.device.commit_config()
@@ -59,12 +63,14 @@ class TestConfigCumulusDriver(unittest.TestCase, TestConfigNetworkDriver):
     def test_merge_configuration_typo_and_rollback(self):
         result = False
         try:
-            self.device.load_merge_candidate(filename='%s/merge_typo.conf' % self.vendor)
+            self.device.load_merge_candidate(
+                filename="%s/merge_typo.conf" % self.vendor
+            )
             self.device.compare_config()
             self.device.commit_config()
             raise Exception("We shouldn't be here")
         except exceptions.MergeConfigException:
-            result = self.device.compare_config() == ''
+            result = self.device.compare_config() == ""
             self.device.discard_config()
 
         self.assertTrue(result)

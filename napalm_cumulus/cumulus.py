@@ -28,10 +28,7 @@ from netmiko.ssh_exception import NetMikoTimeoutException
 import napalm.base.constants as C
 from napalm.base.utils import string_parsers
 from napalm.base.base import NetworkDriver
-from napalm.base.exceptions import (
-    ConnectionException,
-    MergeConfigException
-    )
+from napalm.base.exceptions import CommandErrorException, ConnectionException, MergeConfigException
 
 
 class CumulusDriver(NetworkDriver):
@@ -52,54 +49,53 @@ class CumulusDriver(NetworkDriver):
 
         # Netmiko possible arguments
         netmiko_argument_map = {
-            'port': None,
-            'verbose': False,
-            'global_delay_factor': 1,
-            'use_keys': False,
-            'key_file': None,
-            'ssh_strict': False,
-            'system_host_keys': False,
-            'alt_host_keys': False,
-            'alt_key_file': '',
-            'ssh_config_file': None,
-            'secret': password,
-            'allow_agent': False
+            "port": None,
+            "verbose": False,
+            "global_delay_factor": 1,
+            "use_keys": False,
+            "key_file": None,
+            "ssh_strict": False,
+            "system_host_keys": False,
+            "alt_host_keys": False,
+            "alt_key_file": "",
+            "ssh_config_file": None,
+            "secret": password,
+            "allow_agent": False,
         }
 
         # Build dict of any optional Netmiko args
         self.netmiko_optional_args = {
-                k: optional_args.get(k, v)
-                for k, v in netmiko_argument_map.items()
-            }
-        self.port = optional_args.get('port', 22)
-        self.sudo_pwd = optional_args.get('sudo_pwd', self.password)
+            k: optional_args.get(k, v) for k, v in netmiko_argument_map.items()
+        }
+        self.port = optional_args.get("port", 22)
+        self.sudo_pwd = optional_args.get("sudo_pwd", self.password)
 
     def open(self):
         try:
-            self.device = ConnectHandler(device_type='linux',
-                                         host=self.hostname,
-                                         username=self.username,
-                                         password=self.password,
-                                         **self.netmiko_optional_args)
+            self.device = ConnectHandler(
+                device_type="linux",
+                host=self.hostname,
+                username=self.username,
+                password=self.password,
+                **self.netmiko_optional_args
+            )
         except NetMikoTimeoutException:
-            raise ConnectionException('Cannot connect to {}'.format(self.hostname))
+            raise ConnectionException("Cannot connect to {}".format(self.hostname))
 
     def close(self):
         self.device.disconnect()
 
     def is_alive(self):
-        return {
-            'is_alive': self.device.remote_conn.transport.is_active()
-        }
+        return {"is_alive": self.device.remote_conn.transport.is_active()}
 
     def load_merge_candidate(self, filename=None, config=None):
         if not filename and not config:
-            raise MergeConfigException('filename or config param must be provided.')
+            raise MergeConfigException("filename or config param must be provided.")
 
         self.loaded = True
 
         if filename is not None:
-            with open(filename, 'r') as f:
+            with open(filename, "r") as f:
                 candidate = f.readlines()
         else:
             candidate = config
@@ -111,75 +107,80 @@ class CumulusDriver(NetworkDriver):
         for command in candidate:
             output = self._send_command(command)
             if "error" in output or "not found" in output:
-                raise MergeConfigException("Command '{0}' cannot be applied.".format(command))
+                raise MergeConfigException(
+                    "Command '{0}' cannot be applied.".format(command)
+                )
 
     def discard_config(self):
         if self.loaded:
-            self._send_command('net abort')
+            self._send_command("net abort")
             self.loaded = False
 
     def compare_config(self):
         if self.loaded:
-            diff = self._send_command('net pending')
-            return re.sub(r'\x1b\[\d+m', '', diff)
-        return ''
+            diff = self._send_command("net pending")
+            return re.sub(r"\x1b\[\d+m", "", diff)
+        return ""
 
     def commit_config(self, message=""):
         if self.loaded:
-            self._send_command('net commit')
+            self._send_command("net commit")
             self.changed = True
             self.loaded = False
 
     def rollback(self):
         if self.changed:
-            self._send_command('net rollback last')
+            self._send_command("net rollback last")
             self.changed = False
 
     def _send_command(self, command):
         if command.startswith("sudo"):
-            self.device.enable()
+            try:
+                self.device.enable()
+            except ValueError:
+                raise CommandErrorException("Unable to sudo")
         response = self.device.send_command(command)
         if command.startswith("sudo"):
             self.device.exit_enable_mode()
         return response
 
     def get_facts(self):
-        facts = {
-            'vendor': 'Cumulus'
-        }
+        facts = {"vendor": "Cumulus"}
 
         # Get "net show hostname" output.
-        hostname = self._send_command('hostname')
+        hostname = self._send_command("hostname")
 
         # Get "net show system" output.
-        show_system_output = self._send_command('net show system')
+        show_system_output = self._send_command("net show system")
         for line in show_system_output.splitlines():
-            if 'build' in line.lower():
+            if "build" in line.lower():
                 os_version = line.split()[-1]
-                model = ' '.join(line.split()[1:3])
-            elif 'uptime' in line.lower():
+                model = " ".join(line.split()[1:3])
+            elif "uptime" in line.lower():
                 uptime = line.split()[-1]
 
         # Get "decode-syseeprom" output.
-        decode_syseeprom_output = self._send_command('decode-syseeprom')
+        decode_syseeprom_output = self._send_command("decode-syseeprom")
         for line in decode_syseeprom_output.splitlines():
-            if 'serial number' in line.lower():
+            if "serial number" in line.lower():
                 serial_number = line.split()[-1]
 
         # Get "net show interface all json" output.
-        interfaces = self._send_command('net show interface all json')
+        interfaces = self._send_command("net show interface all json")
         # Handling bad send_command_timing return output.
         try:
             interfaces = json.loads(interfaces)
         except ValueError:
-            interfaces = json.loads(self.device.send_command('net show interface all json'))
+            interfaces = json.loads(
+                self.device.send_command("net show interface all json")
+            )
 
-        facts['hostname'] = facts['fqdn'] = hostname
-        facts['os_version'] = os_version
-        facts['model'] = model
-        facts['uptime'] = string_parsers.convert_uptime_string_seconds(uptime)
-        facts['serial_number'] = serial_number
-        facts['interface_list'] = string_parsers.sorted_nicely(interfaces.keys())
+        facts["hostname"] = facts["fqdn"] = hostname
+        facts["os_version"] = os_version
+        facts["model"] = model
+        facts["uptime"] = string_parsers.convert_uptime_string_seconds(uptime)
+        facts["serial_number"] = serial_number
+        facts["interface_list"] = string_parsers.sorted_nicely(interfaces.keys())
         return facts
 
     def get_arp_table(self, vrf=""):
@@ -196,7 +197,7 @@ class CumulusDriver(NetworkDriver):
         """
         if vrf:
             raise NotImplementedError
-        output = self._send_command('arp -n')
+        output = self._send_command("arp -n")
         output = output.split("\n")
         output = output[1:]
         arp_table = list()
@@ -209,12 +210,7 @@ class CumulusDriver(NetworkDriver):
                 macaddr = line[2]
 
             arp_table.append(
-                {
-                    'interface': line[-1],
-                    'mac': macaddr,
-                    'ip': line[0],
-                    'age': 0.0
-                }
+                {"interface": line[-1], "mac": macaddr, "ip": line[0], "age": 0.0}
             )
         return arp_table
 
@@ -234,40 +230,45 @@ class CumulusDriver(NetworkDriver):
 
         for ntp_info in output:
             if len(ntp_info) > 0:
-                remote, refid, st, t, when, hostpoll, reachability, delay, offset, \
-                    jitter = ntp_info.split()
+                remote, refid, st, t, when, hostpoll, reachability, delay, offset, jitter = (
+                    ntp_info.split()
+                )
 
                 # 'remote' contains '*' if the machine synchronized with NTP server
                 synchronized = "*" in remote
 
-                match = re.search(r'(\d+\.\d+\.\d+\.\d+)', remote)
+                match = re.search(r"(\d+\.\d+\.\d+\.\d+)", remote)
                 ip = match.group(1)
 
-                when = when if when != '-' else 0
+                when = when if when != "-" else 0
 
-                ntp_stats.append({
-                    "remote": ip,
-                    "referenceid": refid,
-                    "synchronized": bool(synchronized),
-                    "stratum": int(st),
-                    "type": t,
-                    "when": when,
-                    "hostpoll": int(hostpoll),
-                    "reachability": int(reachability),
-                    "delay": float(delay),
-                    "offset": float(offset),
-                    "jitter": float(jitter)
-                })
+                ntp_stats.append(
+                    {
+                        "remote": ip,
+                        "referenceid": refid,
+                        "synchronized": bool(synchronized),
+                        "stratum": int(st),
+                        "type": t,
+                        "when": when,
+                        "hostpoll": int(hostpoll),
+                        "reachability": int(reachability),
+                        "delay": float(delay),
+                        "offset": float(offset),
+                        "jitter": float(jitter),
+                    }
+                )
         return ntp_stats
 
-    def ping(self,
-             destination,
-             source=C.PING_SOURCE,
-             ttl=C.PING_TTL,
-             timeout=C.PING_TIMEOUT,
-             size=C.PING_SIZE,
-             count=C.PING_COUNT,
-             vrf=C.PING_VRF):
+    def ping(
+        self,
+        destination,
+        source=C.PING_SOURCE,
+        ttl=C.PING_TTL,
+        timeout=C.PING_TIMEOUT,
+        size=C.PING_SIZE,
+        count=C.PING_COUNT,
+        vrf=C.PING_VRF,
+    ):
 
         deadline = timeout * count
 
@@ -295,7 +296,7 @@ class CumulusDriver(NetworkDriver):
             # 'loss,', 'time', '3997ms']
             packet_info = output_ping.split("\n")
 
-            if ('transmitted' in packet_info[-2]):
+            if "transmitted" in packet_info[-2]:
                 packet_info = packet_info[-2]
             else:
                 packet_info = packet_info[-3]
@@ -335,10 +336,10 @@ class CumulusDriver(NetworkDriver):
                 match_res = re.search(r"from\s([\d\.]+).*time=([\d\.]+)", res)
                 if match_res is not None:
                     ping_responses.append(
-                      {
-                        "ip_address": match_res.group(1),
-                        "rtt": float(match_res.group(2))
-                      }
+                        {
+                            "ip_address": match_res.group(1),
+                            "rtt": float(match_res.group(2)),
+                        }
                     )
 
             ping_result["success"] = dict()
@@ -350,7 +351,7 @@ class CumulusDriver(NetworkDriver):
                 "rtt_max": rtt_max,
                 "rtt_avg": rtt_avg,
                 "rtt_stddev": rtt_stddev,
-                "results": ping_responses
+                "results": ping_responses,
             }
 
             return ping_result
@@ -359,15 +360,15 @@ class CumulusDriver(NetworkDriver):
         neighbors = []
         for neighbor in neighbors_list:
             temp = {}
-            temp['hostname'] = neighbor['adj_hostname']
-            temp['port'] = neighbor['adj_port']
+            temp["hostname"] = neighbor["adj_hostname"]
+            temp["port"] = neighbor["adj_port"]
             neighbors.append(temp)
         return neighbors
 
     def get_lldp_neighbors(self):
         """Cumulus get_lldp_neighbors."""
         lldp = {}
-        command = 'net show interface all json'
+        command = "net show interface all json"
 
         try:
             intf_output = json.loads(self._send_command(command))
@@ -375,9 +376,10 @@ class CumulusDriver(NetworkDriver):
             intf_output = json.loads(self.device.send_command(command))
 
         for interface in intf_output:
-            if intf_output[interface]['iface_obj']['lldp'] is not None:
+            if intf_output[interface]["iface_obj"]["lldp"] is not None:
                 lldp[interface] = self._get_interface_neighbors(
-                                        intf_output[interface]['iface_obj']['lldp'])
+                    intf_output[interface]["iface_obj"]["lldp"]
+                )
         return lldp
 
     def get_interfaces(self):
@@ -387,33 +389,38 @@ class CumulusDriver(NetworkDriver):
             elif speed.endswith("G") and speed.strip("G").isdigit():
                 return int(speed.strip("G")) * 1000
             return -1
+
         interfaces = {}
         # Get 'net show interface all json' output.
-        output = self._send_command('net show interface all json')
+        output = self._send_command("net show interface all json")
         # Handling bad send_command_timing return output.
         try:
             output_json = json.loads(output)
         except ValueError:
-            output_json = json.loads(self.device.send_command('net show interface all json'))
+            output_json = json.loads(
+                self.device.send_command("net show interface all json")
+            )
         # Determine the current time on the system, to be used when determining the last flap
         current_time = self._send_command("net show time")
-        current_time = datetime.strptime(current_time.rstrip(' '), "%a %d %b %Y %I:%M:%S %p %Z")
+        current_time = datetime.strptime(
+            current_time.rstrip(" "), "%a %d %b %Y %I:%M:%S %p %Z"
+        )
         for interface, iface_data in output_json.items():
             interfaces[interface] = {
-                "description": iface_data['iface_obj']['description'],
-                "is_enabled": False if iface_data['linkstate'] == "ADMDN" else True,
-                "is_up": True if iface_data['linkstate'] == "UP" else False,
-                "mac_address": iface_data['iface_obj']['mac'],
-                "mtu": iface_data['iface_obj']['mtu'],
-                "speed": _convert_speed(iface_data['speed']),
+                "description": iface_data["iface_obj"]["description"],
+                "is_enabled": False if iface_data["linkstate"] == "ADMDN" else True,
+                "is_up": True if iface_data["linkstate"] == "UP" else False,
+                "mac_address": iface_data["iface_obj"]["mac"],
+                "mtu": iface_data["iface_obj"]["mtu"],
+                "speed": _convert_speed(iface_data["speed"]),
             }
 
         # Calculate last interface flap time. Dependent on router daemon
         # Send command to determine if router daemon is running. Not dependent on quagga or frr
         daemon_check = self._send_command("sudo vtysh -c 'show version'")
-        if 'Exiting: failed to connect to any daemons.' in daemon_check:
+        if "Exiting: failed to connect to any daemons." in daemon_check:
             for interface in interfaces.keys():
-                interfaces[interface]['last_flapped'] = -1.0
+                interfaces[interface]["last_flapped"] = -1.0
             return interfaces
 
         show_int_output = self._send_command("sudo vtysh -c 'show interface'")
@@ -438,7 +445,7 @@ class CumulusDriver(NetworkDriver):
             if not interfaces.get(iface):
                 continue
             # If we are unable to find either the up or the down message return -1
-            if not(last_down or last_up):
+            if not (last_down or last_up):
                 interfaces[iface]["last_flapped"] = -1.0
             # If both interfaces have never flapped return -1
             elif all(["never" in i for i in [last_up, last_down]]):
@@ -464,113 +471,124 @@ class CumulusDriver(NetworkDriver):
     def get_interfaces_ip(self):
         interfaces_ip = defaultdict(lambda: defaultdict(lambda: defaultdict()))
         # Get net show interface all json output.
-        output = self._send_command('net show interface all json')
+        output = self._send_command("net show interface all json")
         # Handling bad send_command_timing return output.
         try:
             output_json = json.loads(output)
         except ValueError:
-            output_json = json.loads(self.device.send_command('net show interface all json'))
+            output_json = json.loads(
+                self.device.send_command("net show interface all json")
+            )
         for interface in output_json:
-            if not output_json[interface]['iface_obj']['ip_address']['allentries']:
+            if not output_json[interface]["iface_obj"]["ip_address"]["allentries"]:
                 continue
-            for ip_address in output_json[interface]['iface_obj']['ip_address']['allentries']:
+            for ip_address in output_json[interface]["iface_obj"]["ip_address"][
+                "allentries"
+            ]:
                 ip_ver = ipaddress.ip_interface(ip_address).version
-                ip_ver = 'ipv{}'.format(ip_ver)
-                ip, prefix = ip_address.split('/')
+                ip_ver = "ipv{}".format(ip_ver)
+                ip, prefix = ip_address.split("/")
                 interfaces_ip[interface][ip_ver][ip] = {"prefix_length": int(prefix)}
 
         return interfaces_ip
 
-    def get_config(self, retrieve='all', full=False):
+    def get_config(self, retrieve="all", full=False):
         # Initialise the configuration dictionary
-        configuration = {
-            'startup': '',
-            'running': '',
-            'candidate': '',
-        }
+        configuration = {"startup": "", "running": "", "candidate": ""}
 
-        if retrieve in ('running', 'all'):
+        if retrieve in ("running", "all"):
             # Get net show configuration output.
-            output = self._send_command('net show configuration')
+            output = self._send_command("net show configuration")
 
-            configuration['running'] = output
+            configuration["running"] = output
 
-        if retrieve in ('candidate', 'all'):
+        if retrieve in ("candidate", "all"):
             # Get net pending output.
-            output = self._send_command('net pending json')
+            output = self._send_command("net pending json")
 
-            configuration['candidate'] = output
+            configuration["candidate"] = output
 
         return configuration
 
     def get_bgp_neighbors(self):
-        vrf = 'global'
+        vrf = "global"
         bgp_neighbors = {vrf: {}}
         bgp_neighbor = {}
-        supported_afis = ['ipv4 unicast', 'ipv6 unicast']
-        bgp_summary_output = self._send_command('net show bgp summary json')
+        supported_afis = ["ipv4 unicast", "ipv6 unicast"]
+        bgp_summary_output = self._send_command("net show bgp summary json")
         dev_bgp_summary = json.loads(bgp_summary_output)
-        bgp_neighbors_output = self._send_command('net show bgp neighbor json')
+        bgp_neighbors_output = self._send_command("net show bgp neighbor json")
         dev_bgp_neighbors = json.loads(bgp_neighbors_output)
         for afi in dev_bgp_summary:
             if not (afi.lower() in supported_afis) or not dev_bgp_summary[afi]:
                 continue
-            bgp_neighbors[vrf]['router_id'] = dev_bgp_summary[afi]['routerId']
+            bgp_neighbors[vrf]["router_id"] = dev_bgp_summary[afi]["routerId"]
             bgp_neighbors[vrf].setdefault("peers", {})
-            for peer in dev_bgp_summary[afi]['peers']:
+            for peer in dev_bgp_summary[afi]["peers"]:
                 bgp_neighbor = {}
-                bgp_neighbor['local_as'] = dev_bgp_neighbors[peer]['localAs']
-                bgp_neighbor['remote_as'] = dev_bgp_neighbors[peer]['remoteAs']
-                bgp_neighbor['remote_id'] = dev_bgp_neighbors[peer]['remoteRouterId']
-                uptime = dev_bgp_neighbors[peer].get('bgpTimerUpMsec', "")
-                bgp_neighbor['description'] = dev_bgp_neighbors[peer].get("nbrDesc", '')
-                if dev_bgp_neighbors[peer]['bgpState'] == 'Established':
+                bgp_neighbor["local_as"] = dev_bgp_neighbors[peer]["localAs"]
+                bgp_neighbor["remote_as"] = dev_bgp_neighbors[peer]["remoteAs"]
+                bgp_neighbor["remote_id"] = dev_bgp_neighbors[peer]["remoteRouterId"]
+                uptime = dev_bgp_neighbors[peer].get("bgpTimerUpMsec", "")
+                bgp_neighbor["description"] = dev_bgp_neighbors[peer].get("nbrDesc", "")
+                if dev_bgp_neighbors[peer]["bgpState"] == "Established":
                     is_up = True
                 else:
                     is_up = False
                     uptime = -1
-                if dev_bgp_neighbors[peer].get('adminShutDown', False):
+                if dev_bgp_neighbors[peer].get("adminShutDown", False):
                     is_enabled = False
                 else:
                     is_enabled = True
-                bgp_neighbor['is_up'] = is_up
-                bgp_neighbor['is_enabled'] = is_enabled
-                bgp_neighbor['uptime'] = int(uptime / 1000)
+                bgp_neighbor["is_up"] = is_up
+                bgp_neighbor["is_enabled"] = is_enabled
+                bgp_neighbor["uptime"] = int(uptime / 1000)
                 bgp_neighbor.setdefault("address_family", {})
-                for af, af_details in dev_bgp_neighbors[peer]['addressFamilyInfo'].items():
+                for af, af_details in dev_bgp_neighbors[peer][
+                    "addressFamilyInfo"
+                ].items():
                     af = af.lower()
                     if not (af in supported_afis):
                         continue
                     route_info = {}
-                    bgp_peer_advertised_routes = self._send_command('net show bgp {} neighbor {} '
-                                                                    'advertised-routes json'
-                                                                    .format(af, peer))
-                    dev_bgp_peer_advertised_routes = \
-                        json.loads(bgp_peer_advertised_routes.replace('n\n', ''))
-                    peer_advertised_routes = dev_bgp_peer_advertised_routes['totalPrefixCounter']
+                    bgp_peer_advertised_routes = self._send_command(
+                        "net show bgp {} neighbor {} "
+                        "advertised-routes json".format(af, peer)
+                    )
+                    dev_bgp_peer_advertised_routes = json.loads(
+                        bgp_peer_advertised_routes.replace("n\n", "")
+                    )
+                    peer_advertised_routes = dev_bgp_peer_advertised_routes[
+                        "totalPrefixCounter"
+                    ]
                     if not is_enabled:
-                        dev_bgp_summary[af]['peers'][peer]['prefixReceivedCount'] = -1
+                        dev_bgp_summary[af]["peers"][peer]["prefixReceivedCount"] = -1
                         peer_advertised_routes = -1
-                        af_details['acceptedPrefixCounter'] = -1
-                    route_info['received_prefixes'] = \
-                        dev_bgp_summary[af]['peers'][peer]['prefixReceivedCount']
-                    route_info['sent_prefixes'] = int(peer_advertised_routes)
-                    route_info['accepted_prefixes'] = af_details['acceptedPrefixCounter']
-                    bgp_neighbor['address_family'][af.split()[0]] = route_info
-                bgp_neighbors[vrf]['peers'][peer] = bgp_neighbor
+                        af_details["acceptedPrefixCounter"] = -1
+                    route_info["received_prefixes"] = dev_bgp_summary[af]["peers"][
+                        peer
+                    ]["prefixReceivedCount"]
+                    route_info["sent_prefixes"] = int(peer_advertised_routes)
+                    route_info["accepted_prefixes"] = af_details[
+                        "acceptedPrefixCounter"
+                    ]
+                    bgp_neighbor["address_family"][af.split()[0]] = route_info
+                bgp_neighbors[vrf]["peers"][peer] = bgp_neighbor
 
         return bgp_neighbors
 
     def get_snmp_information(self):
-        snmp_config_output = self._send_command('net show configuration snmp-server')
+        snmp_config_output = self._send_command("net show configuration snmp-server")
         contact = system_name = location = ""
         snmp_information = {}
         snmp_values = {}
         community_list = []
         snmp_values.setdefault("community", {})
         for parse_snmp_value in snmp_config_output.splitlines():
-            if "readonly-community" in parse_snmp_value or \
-                    "readonly-community-v6" in parse_snmp_value:
+            if (
+                "readonly-community" in parse_snmp_value
+                or "readonly-community-v6" in parse_snmp_value
+            ):
                 community_value = parse_snmp_value.strip().split()[1]
                 acl = parse_snmp_value.lstrip().split()[3]
                 if acl == "any":
@@ -593,17 +611,29 @@ class CumulusDriver(NetworkDriver):
                     we show comma separate string of them as key of SNMP community.
                     """
                     acl = snmp_values["community"][community_value]["acl"] + "," + acl
-                    snmp_values["community"][community_value] = {"acl": acl, "mode": "ro"}
+                    snmp_values["community"][community_value] = {
+                        "acl": acl,
+                        "mode": "ro",
+                    }
                 else:
                     community_list.append(community_value)
-                    snmp_values["community"][community_value] = {"acl": acl, "mode": "ro"}
-            system_contact_parse = re.search(r'.*system-contact.(\D.*)', parse_snmp_value.strip())
+                    snmp_values["community"][community_value] = {
+                        "acl": acl,
+                        "mode": "ro",
+                    }
+            system_contact_parse = re.search(
+                r".*system-contact.(\D.*)", parse_snmp_value.strip()
+            )
             if system_contact_parse:
                 contact = system_contact_parse.groups()[0]
-            system_location_parse = re.search(r'.*system-location.(\D.*)', parse_snmp_value.strip())
+            system_location_parse = re.search(
+                r".*system-location.(\D.*)", parse_snmp_value.strip()
+            )
             if system_location_parse:
                 location = system_location_parse.groups()[0]
-            system_name_parse = re.search(r'.*system-name.(\D.*)', parse_snmp_value.strip())
+            system_name_parse = re.search(
+                r".*system-name.(\D.*)", parse_snmp_value.strip()
+            )
             if system_name_parse:
                 system_name = system_name_parse.groups()[0]
         snmp_information = snmp_values
@@ -612,3 +642,61 @@ class CumulusDriver(NetworkDriver):
         snmp_information["location"] = location
 
         return snmp_information
+
+    def get_environment(self):
+        def _psu(psu_data):
+            return {
+                psu_data["name"].lower(): {
+                    "status": True if psu_data['state'] == "OK" else False,
+                    "output": float(psu_data.get("input", "-1.0")),
+                    # Capacity data isn't available yet
+                    "capacity": -1.0
+                }
+            }
+
+        def _fan(fan_data):
+            return {fan_data["name"]: {"status": True if fan_data["state"] == "OK" else False}}
+
+        def _temp(temp_data):
+            return {
+                temp_data['name']: {
+                    "temperature": float(temp_data["input"]),
+                    "is_critical": temp_data["input"] > temp_data["crit"],
+                    # 90% of the critical threshold
+                    "is_alert": temp_data["input"] > (temp_data["crit"] * .9)
+                }
+            }
+
+        def _memory(memory_data):
+            memory_data = [i for i in memory_data.splitlines() if i.startswith("Mem:")]
+            if not memory_data:
+                return {"available_ram": -1, "used_ram": -1}
+            memory_data = memory_data[0].split()
+            total = memory_data[1]
+            free = memory_data[3]
+            return {
+                "available_ram": int(total) if total.isdigit() else -1,
+                "used_ram": int(free) if free.isdigit() else -1
+            }
+
+        smonctl_output = self._send_command('sudo smonctl --json')
+        smonctl_output = json.loads(smonctl_output)
+        env_data = {
+            "fans": {},
+            "temperature": {},
+            "power": {},
+            "cpu": {},
+            "memory": {}
+        }
+        for data in smonctl_output:
+            if "power" == data['type']:
+                env_data["power"].update(_psu(data))
+            elif "fan" == data["type"]:
+                env_data["fans"].update(_fan(data))
+            elif "temp" == data["type"]:
+                env_data["temperature"].update(_temp(data))
+
+        memory_data = self._send_command("free")
+        env_data["memory"].update(_memory(memory_data))
+
+        return env_data
