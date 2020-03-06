@@ -28,7 +28,11 @@ from netmiko.ssh_exception import NetMikoTimeoutException
 import napalm.base.constants as C
 from napalm.base.utils import string_parsers
 from napalm.base.base import NetworkDriver
-from napalm.base.exceptions import CommandErrorException, ConnectionException, MergeConfigException
+from napalm.base.exceptions import (
+    CommandErrorException,
+    ConnectionException,
+    MergeConfigException,
+)
 
 
 class CumulusDriver(NetworkDriver):
@@ -156,7 +160,7 @@ class CumulusDriver(NetworkDriver):
             "model": system["eeprom"]["tlv"]["Product Name"]["value"],
             "hostname": system["hostname"],
             "os_version": system["os-version"],
-            "serial_number": system["eeprom"]["tlv"]["Serial Number"]["value"]
+            "serial_number": system["eeprom"]["tlv"]["Serial Number"]["value"],
         }
         facts["fqdn"] = facts["hostname"]
 
@@ -635,7 +639,7 @@ class CumulusDriver(NetworkDriver):
     def cli(self, commands):
         cli_output = {}
         if type(commands) is not list:
-            raise TypeError('Please enter a valid list of commands!')
+            raise TypeError("Please enter a valid list of commands!")
 
         for command in commands:
             output = self.device.send_command(command)
@@ -646,23 +650,27 @@ class CumulusDriver(NetworkDriver):
         def _psu(psu_data):
             return {
                 psu_data["name"].lower(): {
-                    "status": True if psu_data['state'] == "OK" else False,
+                    "status": True if psu_data["state"] == "OK" else False,
                     "output": float(psu_data.get("input", "-1.0")),
                     # Capacity data isn't available yet
-                    "capacity": -1.0
+                    "capacity": -1.0,
                 }
             }
 
         def _fan(fan_data):
-            return {fan_data["name"]: {"status": True if fan_data["state"] == "OK" else False}}
+            return {
+                fan_data["name"]: {
+                    "status": True if fan_data["state"] == "OK" else False
+                }
+            }
 
         def _temp(temp_data):
             return {
-                temp_data['name']: {
+                temp_data["name"]: {
                     "temperature": float(temp_data["input"]),
                     "is_critical": temp_data["input"] > temp_data["crit"],
                     # 90% of the critical threshold
-                    "is_alert": temp_data["input"] > (temp_data["crit"] * .9)
+                    "is_alert": temp_data["input"] > (temp_data["crit"] * 0.9),
                 }
             }
 
@@ -675,20 +683,14 @@ class CumulusDriver(NetworkDriver):
             free = memory_data[3]
             return {
                 "available_ram": int(total) if total.isdigit() else -1,
-                "used_ram": int(free) if free.isdigit() else -1
+                "used_ram": int(free) if free.isdigit() else -1,
             }
 
-        smonctl_output = self._send_command('sudo smonctl --json')
+        smonctl_output = self._send_command("sudo smonctl --json")
         smonctl_output = json.loads(smonctl_output)
-        env_data = {
-            "fans": {},
-            "temperature": {},
-            "power": {},
-            "cpu": {},
-            "memory": {}
-        }
+        env_data = {"fans": {}, "temperature": {}, "power": {}, "cpu": {}, "memory": {}}
         for data in smonctl_output:
-            if "power" == data['type']:
+            if "power" == data["type"]:
                 env_data["power"].update(_psu(data))
             elif "fan" == data["type"]:
                 env_data["fans"].update(_fan(data))
@@ -699,4 +701,3 @@ class CumulusDriver(NetworkDriver):
         env_data["memory"].update(_memory(memory_data))
 
         return env_data
-

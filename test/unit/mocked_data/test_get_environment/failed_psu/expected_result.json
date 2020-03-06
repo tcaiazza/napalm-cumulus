@@ -1,0 +1,94 @@
+{
+    "cpu": {},
+    "fans": {
+        "Fan1": {
+            "status": true
+        },
+        "Fan2": {
+            "status": true
+        },
+        "Fan3": {
+            "status": true
+        },
+        "Fan4": {
+            "status": true
+        },
+        "Fan5": {
+            "status": true
+        },
+        "Fan6": {
+            "status": true
+        },
+        "Fan7": {
+            "status": true
+        },
+        "Fan8": {
+            "status": true
+        },
+        "PSU1Fan1": {
+            "status": true
+        },
+        "PSU2Fan1": {
+            "status": true
+        }
+    },
+    "memory": {
+        "available_ram": 8040136,
+        "used_ram": 5355160
+
+    },
+    "power": {
+        "psu1": {
+            "capacity": -1.0,
+            "output": -1.0,
+            "status": false
+        },
+        "psu2": {
+            "capacity": -1.0,
+            "output": -1.0,
+            "status": true
+        }
+    },
+    "temperature": {
+        "PSU1Temp1": {
+            "is_alert": false,
+            "is_critical": false,
+            "temperature": 31.0
+        },
+        "PSU2Temp1": {
+            "is_alert": false,
+            "is_critical": false,
+            "temperature": 30.0
+        },
+        "Temp1": {
+            "is_alert": false,
+            "is_critical": false,
+            "temperature": 38.0
+        },
+        "Temp2": {
+            "is_alert": false,
+            "is_critical": false,
+            "temperature": 38.0
+        },
+        "Temp3": {
+            "is_alert": false,
+            "is_critical": false,
+            "temperature": 36.0
+        },
+        "Temp4": {
+            "is_alert": false,
+            "is_critical": false,
+            "temperature": 32.0
+        },
+        "Temp5": {
+            "is_alert": false,
+            "is_critical": false,
+            "temperature": 30.5
+        },
+        "Temp6": {
+            "is_alert": false,
+            "is_critical": false,
+            "temperature": 40.0
+        }
+    }
+}
