@@ -401,7 +401,7 @@ class CumulusDriver(NetworkDriver):
                 self.device.send_command("net show interface all json")
             )
         # Determine the current time on the system, to be used when determining the last flap
-        current_time = self._send_command("net show time")
+        current_time = self._send_command("date +'%a %d %b %Y %I:%M:%S %p %Z'")
         current_time = datetime.strptime(
             current_time.rstrip(" "), "%a %d %b %Y %I:%M:%S %p %Z"
         )
