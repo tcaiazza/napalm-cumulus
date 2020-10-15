@@ -643,6 +643,16 @@ class CumulusDriver(NetworkDriver):
 
         return snmp_information
 
+    def cli(self, commands):
+        cli_output = {}
+        if type(commands) is not list:
+            raise TypeError('Please enter a valid list of commands!')
+
+        for command in commands:
+            output = self.device.send_command(command)
+            cli_output[command] = output
+        return cli_output
+
     def get_environment(self):
         def _psu(psu_data):
             return {
@@ -700,3 +710,4 @@ class CumulusDriver(NetworkDriver):
         env_data["memory"].update(_memory(memory_data))
 
         return env_data
+
