@@ -8,7 +8,7 @@ except ImportError:  # for pip <= 9.0.3
 from setuptools import find_packages, setup
 
 
-__author__ = 'Gabriele Gerbino <gabrielegerbino@gmail.com>'
+__author__ = 'Shem Valentine <shem.valentine@vivint.com>'
 
 install_reqs = parse_requirements('requirements.txt', session=uuid.uuid1())
 reqs = [str(ir.req) for ir in install_reqs]
@@ -16,20 +16,19 @@ reqs = [str(ir.req) for ir in install_reqs]
 
 setup(
     name="napalm-cumulus",
-    version="3.0.0",
-    packages=find_packages(),
-    author="Gabriele Gerbino",
-    author_email="gabrielegerbino@gmail.com",
+    version="4.0.0",
+    packages=find_packages(exclude=["test", "test.*"]),
+    author="Shem Valentine",
+    author_email="shem.valentine@vivint.com",
     description="Network Automation and Programmability Abstraction Layer with Multivendor support",
     classifiers=[
         'Topic :: Utilities',
-         'Programming Language :: Python',
-         'Programming Language :: Python :: 2',
-         'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python',
+        'Programming Language :: Python :: 3',
         'Operating System :: POSIX :: Linux',
         'Operating System :: MacOS',
     ],
-    url="https://github.com/napalm-automation/napalm-cumulus",
+    url="https://source.vivint.com/projects/POPS/repos/napalm-cumulus/browse",
     include_package_data=True,
     install_requires=reqs,
 )
