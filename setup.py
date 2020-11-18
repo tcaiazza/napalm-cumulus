@@ -16,7 +16,7 @@ reqs = [str(ir.req) for ir in install_reqs]
 
 setup(
     name="napalm-cumulus",
-    version="4.0.0",
+    version="4.0.1",
     packages=find_packages(exclude=["test", "test.*"]),
     author="Shem Valentine",
     author_email="shem.valentine@vivint.com",
