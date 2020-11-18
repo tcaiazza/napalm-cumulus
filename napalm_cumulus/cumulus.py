@@ -145,25 +145,20 @@ class CumulusDriver(NetworkDriver):
         return response
 
     def get_facts(self):
-        facts = {"vendor": "Cumulus"}
-
-        # Get "net show hostname" output.
-        hostname = self._send_command("hostname")
+        facts = {}
 
         # Get "net show system" output.
-        show_system_output = self._send_command("net show system")
-        for line in show_system_output.splitlines():
-            if "build" in line.lower():
-                os_version = line.split()[-1]
-                model = " ".join(line.split()[1:3])
-            elif "uptime" in line.lower():
-                uptime = line.split()[-1]
+        system = json.loads(self._send_command("net show system json"))
 
-        # Get "decode-syseeprom" output.
-        decode_syseeprom_output = self._send_command("decode-syseeprom")
-        for line in decode_syseeprom_output.splitlines():
-            if "serial number" in line.lower():
-                serial_number = line.split()[-1]
+        facts = {
+            "uptime": string_parsers.convert_uptime_string_seconds(system["uptime"]),
+            "vendor": system["eeprom"]["tlv"]["Vendor Name"]["value"],
+            "model": system["eeprom"]["tlv"]["Product Name"]["value"],
+            "hostname": system["hostname"],
+            "os_version": system["os-version"],
+            "serial_number": system["eeprom"]["tlv"]["Serial Number"]["value"]
+        }
+        facts["fqdn"] = facts["hostname"]
 
         # Get "net show interface all json" output.
         interfaces = self._send_command("net show interface all json")
@@ -175,11 +170,6 @@ class CumulusDriver(NetworkDriver):
                 self.device.send_command("net show interface all json")
             )
 
-        facts["hostname"] = facts["fqdn"] = hostname
-        facts["os_version"] = os_version
-        facts["model"] = model
-        facts["uptime"] = string_parsers.convert_uptime_string_seconds(uptime)
-        facts["serial_number"] = serial_number
         facts["interface_list"] = string_parsers.sorted_nicely(interfaces.keys())
         return facts
 

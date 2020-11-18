@@ -1,11 +1,11 @@
 {
-    "uptime": 545, 
-    "vendor": "Cumulus", 
+    "uptime": 75, 
+    "vendor": "Cumulus Networks", 
     "hostname": "cumulus", 
     "fqdn": "cumulus", 
-    "os_version": "3.2.0", 
-    "serial_number": "08:00:27:70:e6:e9", 
-    "model": "Cumulus Linux", 
+    "os_version": "4.1.1", 
+    "serial_number": "44:38:39:00:00:00", 
+    "model": "VX", 
     "interface_list": [
         "eth0", 
         "lo", 
